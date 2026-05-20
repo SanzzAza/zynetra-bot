@@ -7,7 +7,7 @@ CONFIG_FILE="/etc/zivpn/config.json"
 TRIAL_DB="/etc/zivpn/trial_users.db"
 LOG_FILE="/var/log/zynetra_trial.log"
 LOCK_FILE="/tmp/zynetra_trial.lock"
-TRIAL_DURATION="${TRIAL_DURATION:-3600}"
+TRIAL_DURATION="${TRIAL_DURATION:-1800}"
 ZIVPN_SERVICE="${ZIVPN_SERVICE:-zivpn}"
 
 mkdir -p "$(dirname "$TRIAL_DB")" /var/log
