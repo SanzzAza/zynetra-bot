@@ -1,397 +1,398 @@
-#!/usr/bin/env python3
-# =====================================================
-# ZYNETRA ziVPN Bot - Single VPS Edition
-# =====================================================
-
 import os
 import time
-import html
 import shutil
-import logging
+import sqlite3
 import subprocess
-from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
 
 load_dotenv()
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-HOST = os.getenv("HOST", "your-server.duckdns.org").strip()
-ISP_NAME = os.getenv("ISP_NAME", "ZYNETRA SERVER").strip()
-SERVER_NAME = os.getenv("SERVER_NAME", "ID-BIZNET-1").strip()
-TUTORIAL_URL = os.getenv("TUTORIAL_URL", "https://youtu.be/").strip()
-ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "0").split(",") if x.strip().isdigit()]
-TRIAL_SCRIPT = os.getenv("TRIAL_SCRIPT", "/etc/zivpn/zivpn_trial.sh").strip()
-ZIVPN_SERVICE = os.getenv("ZIVPN_SERVICE", "zivpn").strip()
-BOT_DATA_DIR = Path(os.getenv("BOT_DATA_DIR", "/opt/zivpn-bot"))
-USERS_DB = BOT_DATA_DIR / "users.txt"
-COOLDOWN_SECONDS = int(os.getenv("COOLDOWN_SECONDS", "10"))
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+HOST = os.getenv("HOST", "zynetra.duckdns.org")
+ISP_NAME = os.getenv("ISP_NAME", "Zynetra Network")
+TUTORIAL_URL = os.getenv("TUTORIAL_URL", "https://youtube.com")
+ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()]
+TRIAL_SCRIPT = os.getenv("TRIAL_SCRIPT", "/etc/zivpn/zivpn_trial.sh")
 
-BOT_DATA_DIR.mkdir(parents=True, exist_ok=True)
-USERS_DB.touch(exist_ok=True)
-_cooldown: dict[int, float] = {}
+TZ = ZoneInfo("Asia/Jakarta")
+DB_PATH = "/opt/zivpn-bot/zynetra.db"
+BACKUP_DIR = "/opt/zivpn-bot/backups"
 
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-    handlers=[logging.FileHandler("/var/log/zynetra_bot.log"), logging.StreamHandler()],
-)
-logger = logging.getLogger("zynetra-bot")
+TRIAL_MINUTES = 30
+COOLDOWN_SECONDS = 30
+
+cooldown = {}
+broadcast_mode = set()
 
 
-def esc(text: object) -> str:
-    return html.escape(str(text), quote=False)
+def now_wib():
+    return datetime.now(TZ)
 
 
-def is_admin_id(user_id: int) -> bool:
+def fmt_time(dt):
+    return dt.astimezone(TZ).strftime("%d-%m-%Y %H:%M:%S WIB")
+
+
+def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
 
-def user_key(user_id: int) -> str:
-    return f"tg_{user_id}"
+def db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        telegram_id INTEGER PRIMARY KEY,
+        username TEXT,
+        first_name TEXT,
+        created_at TEXT
+    )
+    """)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS trials (
+        telegram_id INTEGER PRIMARY KEY,
+        vpn_user TEXT,
+        vpn_pass TEXT,
+        expired_at INTEGER,
+        created_at INTEGER
+    )
+    """)
+    conn.commit()
+    return conn
 
 
-def register_user(user) -> None:
-    line_id = str(user.id)
-    rows = USERS_DB.read_text(errors="ignore").splitlines()
-    existing = {r.split("|", 1)[0] for r in rows if r.strip()}
-    if line_id not in existing:
-        username = user.username or "-"
-        name = user.full_name or user.first_name or "-"
-        with USERS_DB.open("a", encoding="utf-8") as f:
-            f.write(f"{user.id}|{username}|{name}|{int(time.time())}\n")
+def save_user(user):
+    conn = db()
+    conn.execute(
+        "INSERT OR IGNORE INTO users VALUES (?, ?, ?, ?)",
+        (
+            user.id,
+            user.username or "",
+            user.first_name or "",
+            fmt_time(now_wib()),
+        ),
+    )
+    conn.commit()
+    conn.close()
 
 
-def all_user_ids() -> list[int]:
-    ids: list[int] = []
-    for row in USERS_DB.read_text(errors="ignore").splitlines():
-        try:
-            ids.append(int(row.split("|", 1)[0]))
-        except Exception:
-            pass
-    return sorted(set(ids))
-
-
-def cooldown_left(user_id: int) -> float:
-    last = _cooldown.get(user_id, 0)
-    return max(0.0, COOLDOWN_SECONDS - (time.time() - last))
-
-
-def set_cooldown(user_id: int) -> None:
-    _cooldown[user_id] = time.time()
-
-
-def run_script(action: str, arg: str = "") -> str:
-    if not os.path.isfile(TRIAL_SCRIPT):
-        return "ERROR|Script trial tidak ditemukan."
-    cmd = ["bash", TRIAL_SCRIPT, action]
-    if arg:
-        cmd.append(arg)
-    try:
-        p = subprocess.run(cmd, text=True, capture_output=True, timeout=35)
-        out = (p.stdout or "").strip()
-        err = (p.stderr or "").strip()
-        if p.returncode != 0 and not out:
-            return f"ERROR|{err or 'Script error'}"
-        return out or "ERROR|Script tidak mengembalikan output."
-    except subprocess.TimeoutExpired:
-        return "ERROR|Timeout saat proses akun."
-    except Exception as e:
-        logger.exception("run_script error")
-        return f"ERROR|{e}"
-
-
-def service_status() -> str:
-    try:
-        r = subprocess.run(["systemctl", "is-active", ZIVPN_SERVICE], text=True, capture_output=True, timeout=5)
-        return "🟢 Online" if r.stdout.strip() == "active" else "🔴 Offline"
-    except Exception:
-        return "⚪ Unknown"
-
-
-def server_metrics() -> dict[str, str]:
-    disk = shutil.disk_usage("/")
-    disk_pct = round((disk.used / disk.total) * 100)
-
-    mem_pct = "?"
-    try:
-        meminfo = Path("/proc/meminfo").read_text().splitlines()
-        data = {x.split(":")[0]: int(x.split()[1]) for x in meminfo if x}
-        total = data.get("MemTotal", 1)
-        available = data.get("MemAvailable", 0)
-        mem_pct = str(round(((total - available) / total) * 100))
-    except Exception:
-        pass
-
-    load = "?"
-    try:
-        load = os.getloadavg()[0]
-        load = f"{load:.2f}"
-    except Exception:
-        pass
-
-    uptime = "?"
-    try:
-        seconds = int(float(Path("/proc/uptime").read_text().split()[0]))
-        days = seconds // 86400
-        hours = (seconds % 86400) // 3600
-        uptime = f"{days}d {hours}h"
-    except Exception:
-        pass
-
-    return {"disk": f"{disk_pct}%", "ram": f"{mem_pct}%", "load": load, "uptime": uptime}
-
-
-def main_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton("🚀 Ambil Trial 1 Jam", callback_data="trial")],
-        [InlineKeyboardButton("🔍 Cek Trial", callback_data="status"), InlineKeyboardButton("📡 Server", callback_data="server")],
+def main_menu(user_id):
+    buttons = [
+        [InlineKeyboardButton("🚀 Buat Trial 30 Menit", callback_data="trial")],
+        [
+            InlineKeyboardButton("👤 Status Trial", callback_data="status"),
+            InlineKeyboardButton("🌐 Server", callback_data="server"),
+        ],
         [InlineKeyboardButton("📘 Tutorial", url=TUTORIAL_URL)],
     ]
-    if is_admin:
-        rows.append([InlineKeyboardButton("👑 Admin Panel", callback_data="admin")])
-    return InlineKeyboardMarkup(rows)
+
+    if is_admin(user_id):
+        buttons.append([InlineKeyboardButton("🛠 Admin Panel", callback_data="admin")])
+
+    return InlineKeyboardMarkup(buttons)
 
 
-def admin_keyboard() -> InlineKeyboardMarkup:
+def admin_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📊 Statistik", callback_data="admin_stats"), InlineKeyboardButton("📋 Trial Aktif", callback_data="admin_list")],
-        [InlineKeyboardButton("🧹 Cleanup", callback_data="admin_cleanup"), InlineKeyboardButton("💾 Backup", callback_data="admin_backup")],
-        [InlineKeyboardButton("⬅️ Menu Utama", callback_data="home")],
+        [
+            InlineKeyboardButton("📊 Statistik", callback_data="admin_stats"),
+            InlineKeyboardButton("🌐 Server", callback_data="server"),
+        ],
+        [
+            InlineKeyboardButton("💾 Backup", callback_data="admin_backup"),
+            InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast"),
+        ],
+        [
+            InlineKeyboardButton("🧾 Logs", callback_data="admin_logs"),
+            InlineKeyboardButton("🔙 Kembali", callback_data="home"),
+        ],
     ])
 
 
-def start_text(user) -> str:
-    return (
-        "┏━━━〔 <b>ZYNETRA VPN</b> 〕━━━┓\n"
-        "┃ 🚀 Trial ziVPN Otomatis\n"
-        "┃ ⚡ Cepat • Simple • Auto Expired\n"
-        "┗━━━━━━━━━━━━━━━━━━━━┛\n\n"
-        f"👋 Halo <b>{esc(user.first_name or 'User')}</b>\n"
-        f"🌐 Server: <code>{esc(SERVER_NAME)}</code>\n"
-        f"📡 Host: <code>{esc(HOST)}</code>\n\n"
-        "📌 <b>Ketentuan Trial</b>\n"
-        "• 1 user hanya bisa punya 1 trial aktif\n"
-        "• Masa aktif 1 jam\n"
-        "• Akun otomatis expired\n\n"
-        "Pilih menu di bawah 👇"
+def run_cmd(cmd):
+    try:
+        return subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.STDOUT, timeout=15).strip()
+    except Exception as e:
+        return str(e)
+
+
+def server_status_text():
+    uptime = run_cmd("uptime -p")
+    ram = run_cmd("free -m | awk 'NR==2{printf \"%s/%s MB\", $3,$2}'")
+    disk = run_cmd("df -h / | awk 'NR==2{print $3\"/\"$2\" (\"$5\")\"}'")
+    cpu = run_cmd("top -bn1 | grep 'Cpu(s)' | awk '{print 100-$8 \"%\"}'")
+    date_now = fmt_time(now_wib())
+
+    return f"""┏━━〔 ZYNETRA SERVER 〕━━┓
+┃ 🟢 Status : Online
+┃ 🌐 Host   : {HOST}
+┃ 🏢 ISP    : {ISP_NAME}
+┃ 🕒 Jam    : {date_now}
+┃ ⚙️ CPU    : {cpu}
+┃ 💾 RAM    : {ram}
+┃ 💽 Disk   : {disk}
+┃ ⏱ Uptime : {uptime}
+┗━━━━━━━━━━━━━━━━━━┛"""
+
+
+def get_trial(user_id):
+    conn = db()
+    row = conn.execute(
+        "SELECT vpn_user, vpn_pass, expired_at, created_at FROM trials WHERE telegram_id=?",
+        (user_id,),
+    ).fetchone()
+    conn.close()
+
+    if not row:
+        return None
+
+    vpn_user, vpn_pass, expired_at, created_at = row
+
+    if expired_at <= int(time.time()):
+        return None
+
+    return {
+        "vpn_user": vpn_user,
+        "vpn_pass": vpn_pass,
+        "expired_at": expired_at,
+        "created_at": created_at,
+    }
+
+
+def create_trial(user):
+    old = get_trial(user.id)
+    if old:
+        return old, False
+
+    vpn_user = f"trial{user.id}"
+    vpn_pass = f"zyn{str(user.id)[-5:]}{int(time.time()) % 1000}"
+    expired_at = int(time.time()) + TRIAL_MINUTES * 60
+
+    if os.path.exists(TRIAL_SCRIPT):
+        cmd = f"bash {TRIAL_SCRIPT} {vpn_user} {vpn_pass} {TRIAL_MINUTES}"
+        run_cmd(cmd)
+
+    conn = db()
+    conn.execute(
+        "INSERT OR REPLACE INTO trials VALUES (?, ?, ?, ?, ?)",
+        (user.id, vpn_user, vpn_pass, expired_at, int(time.time())),
     )
+    conn.commit()
+    conn.close()
+
+    return get_trial(user.id), True
 
 
-def format_trial(password: str, expire: str) -> str:
-    return (
-        "┏━━━〔 <b>TRIAL AKTIF</b> 〕━━━┓\n"
-        f"┃ 🌐 Host : <code>{esc(HOST)}</code>\n"
-        f"┃ 🔑 Pass : <code>{esc(password)}</code>\n"
-        f"┃ 📡 ISP  : {esc(ISP_NAME)}\n"
-        f"┃ ⏳ Exp  : {esc(expire)}\n"
-        "┗━━━━━━━━━━━━━━━━━━┛\n\n"
-        "⚠️ Jangan share password ke orang lain.\n"
-        f"📘 Tutorial: {esc(TUTORIAL_URL)}"
-    )
+def trial_text(data, created_new=True):
+    exp = datetime.fromtimestamp(data["expired_at"], TZ)
 
+    title = "AKUN TRIAL BERHASIL DIBUAT" if created_new else "AKUN TRIAL MASIH AKTIF"
 
-async def notify_admins(app: Application, text: str) -> None:
-    for admin_id in ADMIN_IDS:
-        if admin_id:
-            try:
-                await app.bot.send_message(admin_id, text, parse_mode=ParseMode.HTML)
-            except Exception as e:
-                logger.warning("notif admin gagal %s: %s", admin_id, e)
+    return f"""┏━━〔 {title} 〕━━┓
+┃ 🌐 Host : {HOST}
+┃ 🔐 User : {data["vpn_user"]}
+┃ 🔑 Pass : {data["vpn_pass"]}
+┃ ⏳ Masa : {TRIAL_MINUTES} Menit
+┃ 📅 Exp  : {fmt_time(exp)}
+┗━━━━━━━━━━━━━━━━━━┛
+
+📘 Tutorial:
+{TUTORIAL_URL}"""
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    register_user(user)
-    await update.message.reply_text(start_text(user), parse_mode=ParseMode.HTML, reply_markup=main_keyboard(is_admin_id(user.id)))
+    save_user(user)
+
+    text = f"""╔══════════════════╗
+║    ZYNETRA VPN    ║
+╚══════════════════╝
+
+Halo {user.first_name or "user"} 👋
+
+🚀 Trial otomatis
+⏳ Durasi trial: {TRIAL_MINUTES} menit
+🌐 Server: {HOST}
+🏢 ISP: {ISP_NAME}
+
+Pilih menu di bawah 👇"""
+
+    await update.message.reply_text(text, reply_markup=main_menu(user.id))
 
 
-async def trial_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    register_user(update.effective_user)
-    await do_trial(update, context, update.effective_user, False)
+async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
 
+    if not is_admin(user_id):
+        await update.message.reply_text("❌ Lu bukan admin mas.")
+        return
 
-async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    register_user(update.effective_user)
-    await do_status(update, context, update.effective_user, False)
-
-
-async def server_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_server_status(update, context, False)
+    await update.message.reply_text(
+        "┏━━〔 ADMIN PANEL 〕━━┓\n┃ 🛠 ZYNETRA CONTROL\n┗━━━━━━━━━━━━━━━━━━┛",
+        reply_markup=admin_menu(),
+    )
 
 
 async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
+
     user = q.from_user
-    register_user(user)
+    save_user(user)
     data = q.data
 
     if data == "home":
-        await q.message.edit_text(start_text(user), parse_mode=ParseMode.HTML, reply_markup=main_keyboard(is_admin_id(user.id)))
-    elif data == "trial":
-        await do_trial(update, context, user, True)
-    elif data == "status":
-        await do_status(update, context, user, True)
-    elif data == "server":
-        await send_server_status(update, context, True)
-    elif data == "admin":
-        if not is_admin_id(user.id):
-            await q.message.reply_text("❌ Kamu bukan admin.")
-            return
-        await q.message.edit_text("👑 <b>Admin Panel ZYNETRA</b>\n\nPilih menu admin:", parse_mode=ParseMode.HTML, reply_markup=admin_keyboard())
-    elif data.startswith("admin_"):
-        if not is_admin_id(user.id):
-            await q.message.reply_text("❌ Kamu bukan admin.")
-            return
-        await handle_admin_callback(update, context, data)
-
-
-async def do_trial(update: Update, context: ContextTypes.DEFAULT_TYPE, user, is_callback: bool):
-    left = cooldown_left(user.id)
-    reply = update.callback_query.message.reply_text if is_callback else update.message.reply_text
-    if left > 0:
-        await reply(f"⏱ Tunggu <b>{left:.0f} detik</b> dulu mas.", parse_mode=ParseMode.HTML)
-        return
-    set_cooldown(user.id)
-
-    msg = await reply("⏳ Membuat akun trial...")
-    result = run_script("create", user_key(user.id))
-    parts = result.split("|")
-    status = parts[0] if parts else "ERROR"
-
-    if status == "BERHASIL":
-        password = parts[1] if len(parts) > 1 else "-"
-        expire = parts[2] if len(parts) > 2 else "1 jam"
-        await msg.edit_text(format_trial(password, expire), parse_mode=ParseMode.HTML, reply_markup=main_keyboard(is_admin_id(user.id)))
-        await notify_admins(context.application, f"🆕 <b>Trial Baru</b>\n👤 @{esc(user.username or user.first_name)} (<code>{user.id}</code>)\n🔑 <code>{esc(password)}</code>\n⏳ {esc(expire)}")
-    elif status == "SUDAH_ADA":
-        password = parts[1] if len(parts) > 1 else "-"
-        sisa = parts[2] if len(parts) > 2 else "?"
-        await msg.edit_text(format_trial(password, f"Sisa {sisa}"), parse_mode=ParseMode.HTML, reply_markup=main_keyboard(is_admin_id(user.id)))
-    else:
-        err = parts[1] if len(parts) > 1 else result
-        await msg.edit_text(f"❌ <b>Gagal membuat trial</b>\n\n<code>{esc(err)}</code>", parse_mode=ParseMode.HTML)
-
-
-async def do_status(update: Update, context: ContextTypes.DEFAULT_TYPE, user, is_callback: bool):
-    reply = update.callback_query.message.reply_text if is_callback else update.message.reply_text
-    result = run_script("status", user_key(user.id))
-    parts = result.split("|")
-    status = parts[0] if parts else "ERROR"
-
-    if status == "AKTIF":
-        password = parts[1] if len(parts) > 1 else "-"
-        sisa = parts[2] if len(parts) > 2 else "?"
-        await reply(format_trial(password, f"Sisa {sisa}"), parse_mode=ParseMode.HTML, reply_markup=main_keyboard(is_admin_id(user.id)))
-    elif status == "TIDAK_ADA":
-        await reply("🔴 Kamu belum punya trial aktif.\n\nKlik tombol <b>Ambil Trial</b> dulu mas.", parse_mode=ParseMode.HTML, reply_markup=main_keyboard(is_admin_id(user.id)))
-    else:
-        await reply(f"❌ Gagal cek status.\n<code>{esc(result)}</code>", parse_mode=ParseMode.HTML)
-
-
-async def send_server_status(update: Update, context: ContextTypes.DEFAULT_TYPE, is_callback: bool):
-    m = server_metrics()
-    text = (
-        "┏━━━〔 <b>SERVER STATUS</b> 〕━━━┓\n"
-        f"┃ 📡 Service : {service_status()}\n"
-        f"┃ 🌐 Host    : <code>{esc(HOST)}</code>\n"
-        f"┃ 💾 RAM     : {m['ram']}\n"
-        f"┃ 🗄 Disk    : {m['disk']}\n"
-        f"┃ ⚙️ Load    : {m['load']}\n"
-        f"┃ ⏱ Uptime  : {m['uptime']}\n"
-        "┗━━━━━━━━━━━━━━━━━━━━┛"
-    )
-    reply = update.callback_query.message.reply_text if is_callback else update.message.reply_text
-    await reply(text, parse_mode=ParseMode.HTML, reply_markup=main_keyboard(is_admin_id(update.effective_user.id)))
-
-
-async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
-    q = update.callback_query
-    if data == "admin_stats":
-        result = run_script("list")
-        total_active = sum(1 for x in result.splitlines() if x.startswith("USER:"))
-        total_users = len(all_user_ids())
-        await q.message.edit_text(
-            f"📊 <b>Statistik ZYNETRA</b>\n\n👥 User bot: <b>{total_users}</b>\n🚀 Trial aktif: <b>{total_active}</b>\n📡 Service: {service_status()}",
-            parse_mode=ParseMode.HTML,
-            reply_markup=admin_keyboard(),
+        await q.edit_message_text(
+            "╔══════════════════╗\n║    ZYNETRA VPN    ║\n╚══════════════════╝\n\nPilih menu di bawah 👇",
+            reply_markup=main_menu(user.id),
         )
-    elif data == "admin_list":
-        result = run_script("list")
-        await q.message.edit_text(f"📋 <b>Trial Aktif</b>\n\n<pre>{esc(result[:3500])}</pre>", parse_mode=ParseMode.HTML, reply_markup=admin_keyboard())
-    elif data == "admin_cleanup":
-        result = run_script("cleanup")
-        await q.message.edit_text(f"🧹 <b>Cleanup selesai</b>\n\n<pre>{esc(result)}</pre>", parse_mode=ParseMode.HTML, reply_markup=admin_keyboard())
+
+    elif data == "trial":
+        last = cooldown.get(user.id, 0)
+        if time.time() - last < COOLDOWN_SECONDS:
+            await q.edit_message_text("⏳ Jangan spam mas, coba lagi bentar.", reply_markup=main_menu(user.id))
+            return
+
+        cooldown[user.id] = time.time()
+        trial, created = create_trial(user)
+        await q.edit_message_text(trial_text(trial, created), reply_markup=main_menu(user.id))
+
+    elif data == "status":
+        trial = get_trial(user.id)
+        if not trial:
+            await q.edit_message_text(
+                "❌ Lu belum punya trial aktif mas.\n\nKlik tombol trial buat bikin akun 30 menit.",
+                reply_markup=main_menu(user.id),
+            )
+        else:
+            await q.edit_message_text(trial_text(trial, False), reply_markup=main_menu(user.id))
+
+    elif data == "server":
+        await q.edit_message_text(server_status_text(), reply_markup=main_menu(user.id))
+
+    elif data == "admin":
+        if not is_admin(user.id):
+            await q.edit_message_text("❌ Lu bukan admin mas.")
+            return
+        await q.edit_message_text(
+            "┏━━〔 ADMIN PANEL 〕━━┓\n┃ 🛠 ZYNETRA CONTROL\n┗━━━━━━━━━━━━━━━━━━┛",
+            reply_markup=admin_menu(),
+        )
+
+    elif data == "admin_stats":
+        if not is_admin(user.id):
+            return
+
+        conn = db()
+        total_user = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        active_trial = conn.execute(
+            "SELECT COUNT(*) FROM trials WHERE expired_at > ?",
+            (int(time.time()),),
+        ).fetchone()[0]
+        total_trial = conn.execute("SELECT COUNT(*) FROM trials").fetchone()[0]
+        conn.close()
+
+        text = f"""┏━━〔 STATISTIK BOT 〕━━┓
+┃ 👥 Total User  : {total_user}
+┃ 🚀 Total Trial : {total_trial}
+┃ 🟢 Trial Aktif : {active_trial}
+┃ ⏳ Durasi      : {TRIAL_MINUTES} menit
+┃ 🕒 Jam         : {fmt_time(now_wib())}
+┗━━━━━━━━━━━━━━━━━━┛"""
+
+        await q.edit_message_text(text, reply_markup=admin_menu())
+
     elif data == "admin_backup":
-        await send_backup(update, context)
+        if not is_admin(user.id):
+            return
+
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        filename = f"{BACKUP_DIR}/zynetra_backup_{int(time.time())}.db"
+        shutil.copy(DB_PATH, filename)
+
+        await context.bot.send_document(chat_id=user.id, document=open(filename, "rb"), caption="💾 Backup database Zynetra")
+        await q.edit_message_text("✅ Backup berhasil dikirim mas.", reply_markup=admin_menu())
+
+    elif data == "admin_logs":
+        if not is_admin(user.id):
+            return
+
+        logs = run_cmd("tail -n 40 /var/log/zynetra_bot.log")
+        if len(logs) > 3500:
+            logs = logs[-3500:]
+
+        await q.edit_message_text(f"🧾 LOG TERAKHIR:\n\n{logs}", reply_markup=admin_menu())
+
+    elif data == "admin_broadcast":
+        if not is_admin(user.id):
+            return
+
+        broadcast_mode.add(user.id)
+        await q.edit_message_text(
+            "📢 Kirim pesan broadcast sekarang.\n\nContoh:\nMaintenance jam 02:00 WIB",
+            reply_markup=admin_menu(),
+        )
 
 
-async def send_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    backup_path = Path(f"/tmp/zynetra-backup-{datetime.now().strftime('%Y%m%d-%H%M%S')}.txt")
-    chunks = []
-    for path in ["/etc/zivpn/trial_users.db", "/etc/zivpn/config.json", str(USERS_DB)]:
-        p = Path(path)
-        chunks.append(f"\n===== {path} =====\n")
-        chunks.append(p.read_text(errors="ignore") if p.exists() else "FILE TIDAK ADA\n")
-    backup_path.write_text("".join(chunks), encoding="utf-8")
-    await q.message.reply_document(document=backup_path.open("rb"), filename=backup_path.name, caption="💾 Backup ZYNETRA")
-    await q.message.edit_text("✅ Backup dikirim.", reply_markup=admin_keyboard())
+async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    save_user(user)
 
+    if user.id in broadcast_mode:
+        broadcast_mode.remove(user.id)
 
-async def admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin_id(update.effective_user.id):
-        await update.message.reply_text("❌ Kamu bukan admin.")
-        return
-    if not context.args:
-        await update.message.reply_text("Contoh:\n<code>/broadcast Maintenance jam 23:00 WIB</code>", parse_mode=ParseMode.HTML)
-        return
-    text = " ".join(context.args)
-    ok = fail = 0
-    for uid in all_user_ids():
-        try:
-            await context.application.bot.send_message(uid, f"📢 <b>Info ZYNETRA</b>\n\n{esc(text)}", parse_mode=ParseMode.HTML)
-            ok += 1
-        except Exception:
-            fail += 1
-    await update.message.reply_text(f"✅ Broadcast selesai.\nTerkirim: {ok}\nGagal: {fail}")
+        if not is_admin(user.id):
+            return
 
+        msg = update.message.text
 
-async def admin_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin_id(update.effective_user.id):
-        await update.message.reply_text("❌ Kamu bukan admin.")
-        return
-    if not context.args:
-        await update.message.reply_text("Contoh: <code>/remove trial12345</code>", parse_mode=ParseMode.HTML)
-        return
-    password = context.args[0]
-    result = run_script("remove", password)
-    await update.message.reply_text(f"<pre>{esc(result)}</pre>", parse_mode=ParseMode.HTML)
+        conn = db()
+        users = conn.execute("SELECT telegram_id FROM users").fetchall()
+        conn.close()
 
+        success = 0
+        failed = 0
 
-async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin = "\n👑 Admin: /broadcast, /remove" if is_admin_id(update.effective_user.id) else ""
-    await update.message.reply_text("📋 <b>Command</b>\n/start\n/trial\n/status\n/server" + admin, parse_mode=ParseMode.HTML)
+        for (uid,) in users:
+            try:
+                await context.bot.send_message(chat_id=uid, text=f"📢 INFO ZYNETRA\n\n{msg}")
+                success += 1
+            except Exception:
+                failed += 1
+
+        await update.message.reply_text(f"✅ Broadcast selesai.\n\nBerhasil: {success}\nGagal: {failed}")
+    else:
+        await update.message.reply_text("Ketik /start mas 😎")
 
 
 def main():
     if not BOT_TOKEN:
-        raise RuntimeError("BOT_TOKEN kosong. Isi file .env dulu.")
+        raise RuntimeError("BOT_TOKEN kosong. Isi .env dulu mas.")
+
+    os.makedirs("/opt/zivpn-bot", exist_ok=True)
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    db().close()
+
     app = Application.builder().token(BOT_TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("trial", trial_cmd))
-    app.add_handler(CommandHandler("status", status_cmd))
-    app.add_handler(CommandHandler("server", server_cmd))
-    app.add_handler(CommandHandler("help", help_cmd))
-    app.add_handler(CommandHandler("broadcast", admin_broadcast))
-    app.add_handler(CommandHandler("remove", admin_remove))
+    app.add_handler(CommandHandler("admin", admin_cmd))
     app.add_handler(CallbackQueryHandler(callback))
-    logger.info("ZYNETRA Bot started")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+
+    print("ZYNETRA BOT RUNNING...")
+    app.run_polling()
 
 
 if __name__ == "__main__":
