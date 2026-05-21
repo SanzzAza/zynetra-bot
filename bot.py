@@ -38,7 +38,7 @@ broadcast_mode = set()
 premium_mode   = set()
 reminder_sent  = set()
 
-# ── Logging ──────────────────────────────────────────────────────────────────
+# â”€â”€ Logging â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 os.makedirs("/var/log", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
@@ -51,7 +51,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def now_wib():
     return datetime.now(TZ)
 
@@ -70,7 +70,7 @@ def run_cmd(cmd):
         return f"ERROR|{e}"
 
 
-# ── Database ──────────────────────────────────────────────────────────────────
+# â”€â”€ Database â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
@@ -101,46 +101,46 @@ def save_user(user):
     conn.close()
 
 
-# ── Menu ──────────────────────────────────────────────────────────────────────
+# â”€â”€ Menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def main_menu(user_id):
     buttons = [
-        [InlineKeyboardButton("🚀 Ambil Trial 30 Menit", callback_data="trial")],
-        [InlineKeyboardButton("🔍 Cek Trial", callback_data="status"), InlineKeyboardButton("📡 Server", callback_data="server")],
-        [InlineKeyboardButton("📘 Tutorial", url=TUTORIAL_URL)],
+        [InlineKeyboardButton("ðŸš€ Ambil Trial 30 Menit", callback_data="trial")],
+        [InlineKeyboardButton("ðŸ” Cek Trial", callback_data="status"), InlineKeyboardButton("ðŸ“¡ Server", callback_data="server")],
+        [InlineKeyboardButton("ðŸ“˜ Tutorial", url=TUTORIAL_URL)],
     ]
     if is_admin(user_id):
-        buttons.append([InlineKeyboardButton("🛠 Admin Panel", callback_data="admin")])
+        buttons.append([InlineKeyboardButton("ðŸ›  Admin Panel", callback_data="admin")])
     return InlineKeyboardMarkup(buttons)
 
 def admin_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📊 Statistik", callback_data="admin_stats"), InlineKeyboardButton("📡 Server", callback_data="server")],
-        [InlineKeyboardButton("👑 Create Premium", callback_data="admin_premium"), InlineKeyboardButton("📋 List Premium", callback_data="admin_premium_list")],
-        [InlineKeyboardButton("💾 Backup", callback_data="admin_backup"), InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")],
-        [InlineKeyboardButton("🧾 Logs", callback_data="admin_logs"), InlineKeyboardButton("🔙 Kembali", callback_data="home")],
+        [InlineKeyboardButton("ðŸ“Š Statistik", callback_data="admin_stats"), InlineKeyboardButton("ðŸ“¡ Server", callback_data="server")],
+        [InlineKeyboardButton("ðŸ‘‘ Create Premium", callback_data="admin_premium"), InlineKeyboardButton("ðŸ“‹ List Premium", callback_data="admin_premium_list")],
+        [InlineKeyboardButton("ðŸ’¾ Backup", callback_data="admin_backup"), InlineKeyboardButton("ðŸ“¢ Broadcast", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("ðŸ§¾ Logs", callback_data="admin_logs"), InlineKeyboardButton("ðŸ”™ Kembali", callback_data="home")],
     ])
 
 
-# ── Server info ───────────────────────────────────────────────────────────────
+# â”€â”€ Server info â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def server_status_text():
     uptime = run_cmd("uptime -p")
     ram    = run_cmd("free -m | awk 'NR==2{printf \"%s/%s MB\", $3,$2}'")
     disk   = run_cmd("df -h / | awk 'NR==2{print $3\"/\"$2\" (\"$5\")\"}' ")
     cpu    = run_cmd("top -bn1 | grep 'Cpu(s)' | awk '{print 100-$8 \"%\"}'")
-    return f"""┏━━〔 ZYNETRA SERVER 〕━━┓
-┃ 🟢 Status : Online
-┃ 🌐 Host   : {HOST}
-┃ 🧭 Server : {SERVER_NAME}
-┃ 🏢 ISP    : {ISP_NAME}
-┃ 🕒 Jam    : {fmt_time(now_wib())}
-┃ ⚙️ CPU    : {cpu}
-┃ 💾 RAM    : {ram}
-┃ 💽 Disk   : {disk}
-┃ ⏱ Uptime : {uptime}
-┗━━━━━━━━━━━━━━━━━━┛"""
+    return f"""â”â”â”ã€” ZYNETRA SERVER ã€•â”â”â”“
+â”ƒ ðŸŸ¢ Status : Online
+â”ƒ ðŸŒ Host   : {HOST}
+â”ƒ ðŸ§­ Server : {SERVER_NAME}
+â”ƒ ðŸ¢ ISP    : {ISP_NAME}
+â”ƒ ðŸ•’ Jam    : {fmt_time(now_wib())}
+â”ƒ âš™ï¸ CPU    : {cpu}
+â”ƒ ðŸ’¾ RAM    : {ram}
+â”ƒ ðŸ’½ Disk   : {disk}
+â”ƒ â± Uptime : {uptime}
+â”—â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”›"""
 
 
-# ── Trial logic ───────────────────────────────────────────────────────────────
+# â”€â”€ Trial logic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def vpn_user_for(user_id):
     return f"trial{user_id}"
 
@@ -203,52 +203,52 @@ def trial_today_count():
 
 def trial_text(data, created=True):
     title = "AKUN TRIAL BERHASIL DIBUAT" if created else "AKUN TRIAL MASIH AKTIF"
-    return f"""╔══════════════════╗
-║    ZYNETRA VPN    ║
-╚══════════════════╝
+    return f"""â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+â•‘    ZYNETRA VPN    â•‘
+â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-┏━━〔 {title} 〕━━┓
-┃ 🌐 Host : {HOST}
-┃ 🧭 Server : {SERVER_NAME}
-┃ 🔐 User : {data['vpn_user']}
-┃ 🔑 Pass : {data['vpn_pass']}
-┃ ⏳ Masa : {TRIAL_MINUTES} Menit
-┃ 📅 Exp/Sisa : {data.get('expired_text', data.get('left', '-'))}
-┗━━━━━━━━━━━━━━━━━━┛
+â”â”â”ã€” {title} ã€•â”â”â”“
+â”ƒ ðŸŒ Host : {HOST}
+â”ƒ ðŸ§­ Server : {SERVER_NAME}
+â”ƒ ðŸ” User : {data['vpn_user']}
+â”ƒ ðŸ”‘ Pass : {data['vpn_pass']}
+â”ƒ â³ Masa : {TRIAL_MINUTES} Menit
+â”ƒ ðŸ“… Exp/Sisa : {data.get('expired_text', data.get('left', '-'))}
+â”—â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”›
 
-📘 Tutorial:
+ðŸ“˜ Tutorial:
 {TUTORIAL_URL}"""
 
 def premium_text(data, created=True):
     title = "AKUN PREMIUM BERHASIL DIBUAT" if created else "AKUN PREMIUM MASIH AKTIF"
-    return f"""╔══════════════════╗
-║    ZYNETRA VPN    ║
-╚══════════════════╝
+    return f"""â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+â•‘    ZYNETRA VPN    â•‘
+â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-┏━━〔 {title} 〕━━┓
-┃ 🌐 Host : {HOST}
-┃ 🧭 Server : {SERVER_NAME}
-┃ 👑 Paket : Premium {data.get('days', '-')} Hari
-┃ 🔐 User : {data['vpn_user']}
-┃ 🔑 Pass : {data['vpn_pass']}
-┃ 📅 Exp/Sisa : {data.get('expired_text', data.get('left', '-'))}
-┗━━━━━━━━━━━━━━━━━━┛
+â”â”â”ã€” {title} ã€•â”â”â”“
+â”ƒ ðŸŒ Host : {HOST}
+â”ƒ ðŸ§­ Server : {SERVER_NAME}
+â”ƒ ðŸ‘‘ Paket : Premium {data.get('days', '-')} Hari
+â”ƒ ðŸ” User : {data['vpn_user']}
+â”ƒ ðŸ”‘ Pass : {data['vpn_pass']}
+â”ƒ ðŸ“… Exp/Sisa : {data.get('expired_text', data.get('left', '-'))}
+â”—â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”›
 
-📘 Tutorial:
+ðŸ“˜ Tutorial:
 {TUTORIAL_URL}"""
 
 
-# ── Notifikasi & reminder ──────────────────────────────────────────────────────
+# â”€â”€ Notifikasi & reminder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async def notify_admins(context: ContextTypes.DEFAULT_TYPE, user, trial):
     username = f"@{user.username}" if user.username else "-"
-    text = f"""🚀 NEW TRIAL
+    text = f"""ðŸš€ NEW TRIAL
 
-👤 User : {username}
-🆔 ID : {user.id}
-🌐 Server : {SERVER_NAME}
-🔐 VPN User : {trial['vpn_user']}
-⏳ Durasi : {TRIAL_MINUTES} Menit
-🕒 Jam : {fmt_time(now_wib())}"""
+ðŸ‘¤ User : {username}
+ðŸ†” ID : {user.id}
+ðŸŒ Server : {SERVER_NAME}
+ðŸ” VPN User : {trial['vpn_user']}
+â³ Durasi : {TRIAL_MINUTES} Menit
+ðŸ•’ Jam : {fmt_time(now_wib())}"""
     for admin_id in ADMIN_IDS:
         try:
             await context.bot.send_message(chat_id=admin_id, text=text)
@@ -265,38 +265,38 @@ async def send_expiry_reminder_later(context: ContextTypes.DEFAULT_TYPE, chat_id
     active = get_trial_from_script(vpn_user)
     if active:
         try:
-            await context.bot.send_message(chat_id=chat_id, text="⚠️ Trial lu tinggal sekitar 5 menit lagi mas.\n\nSiapin reconnect atau ambil paket premium kalau ada 😎")
+            await context.bot.send_message(chat_id=chat_id, text="âš ï¸ Trial lu tinggal sekitar 5 menit lagi mas.\n\nSiapin reconnect atau ambil paket premium kalau ada ðŸ˜Ž")
         except Exception:
             pass
     # Bersihkan key setelah reminder selesai
     reminder_sent.discard(key)
 
 
-# ── Auto cleanup job ──────────────────────────────────────────────────────────
+# â”€â”€ Auto cleanup job â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async def auto_cleanup(context: ContextTypes.DEFAULT_TYPE):
     result = run_cmd(f"bash {TRIAL_SCRIPT} cleanup")
     logger.info(f"[auto_cleanup] {result}")
 
 
-# ── Command handlers ───────────────────────────────────────────────────────────
-WELCOME_TEXT = """╔══════════════════╗
-║    ZYNETRA VPN    ║
-╚══════════════════╝
+# â”€â”€ Command handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+WELCOME_TEXT = """â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+â•‘    ZYNETRA VPN    â•‘
+â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-Halo {name} 👋
+Halo {name} ðŸ‘‹
 
-🚀 Trial otomatis
-⏳ Durasi trial: {minutes} menit
-🌐 Host: {host}
-🧭 Server: {server}
-🏢 ISP: {isp}
+ðŸš€ Trial otomatis
+â³ Durasi trial: {minutes} menit
+ðŸŒ Host: {host}
+ðŸ§­ Server: {server}
+ðŸ¢ ISP: {isp}
 
-📌 Ketentuan:
-• 1 akun trial per 24 jam
-• Trial tidak bisa diperpanjang
-• Akun otomatis expired sesuai waktu
+ðŸ“Œ Ketentuan:
+â€¢ 1 akun trial per 24 jam
+â€¢ Trial tidak bisa diperpanjang
+â€¢ Akun otomatis expired sesuai waktu
 
-Pilih menu di bawah 👇"""
+Pilih menu di bawah ðŸ‘‡"""
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -325,26 +325,26 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not is_admin(user_id):
-        await update.message.reply_text("❌ Lu bukan admin mas.")
+        await update.message.reply_text("âŒ Lu bukan admin mas.")
         return
-    await update.message.reply_text("┏━━〔 ADMIN PANEL 〕━━┓\n┃ 🛠 ZYNETRA CONTROL\n┗━━━━━━━━━━━━━━━━━━┛", reply_markup=admin_menu())
+    await update.message.reply_text("â”â”â”ã€” ADMIN PANEL ã€•â”â”â”“\nâ”ƒ ðŸ›  ZYNETRA CONTROL\nâ”—â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”›", reply_markup=admin_menu())
 
 
 async def premium_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not is_admin(user.id):
-        await update.message.reply_text("❌ Lu bukan admin mas.")
+        await update.message.reply_text("âŒ Lu bukan admin mas.")
         return
     if len(context.args) != 2:
-        await update.message.reply_text("👑 Format:\n/premium username hari\n\nContoh:\n/premium andi 30")
+        await update.message.reply_text("ðŸ‘‘ Format:\n/premium username hari\n\nContoh:\n/premium andi 30")
         return
     result, ok = create_premium_from_script(context.args[0], context.args[1])
     if not ok:
-        await update.message.reply_text(f"❌ Gagal buat premium mas.\n\nError:\n{result['error']}")
+        await update.message.reply_text(f"âŒ Gagal buat premium mas.\n\nError:\n{result['error']}")
         return
     await update.message.reply_text(premium_text(result, True))
 
-# ── Callback handler ───────────────────────────────────────────────────────────
+# â”€â”€ Callback handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -354,12 +354,12 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     vpn_user = vpn_user_for(user.id)
 
     if data == "home":
-        await q.edit_message_text("╔══════════════════╗\n║    ZYNETRA VPN    ║\n╚══════════════════╝\n\nPilih menu di bawah 👇", reply_markup=main_menu(user.id))
+        await q.edit_message_text("â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\nâ•‘    ZYNETRA VPN    â•‘\nâ•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n\nPilih menu di bawah ðŸ‘‡", reply_markup=main_menu(user.id))
 
     elif data == "trial":
         last = cooldown.get(user.id, 0)
         if time.time() - last < COOLDOWN_SECONDS:
-            await q.edit_message_text("⏳ Jangan spam mas, coba lagi bentar.", reply_markup=main_menu(user.id))
+            await q.edit_message_text("â³ Jangan spam mas, coba lagi bentar.", reply_markup=main_menu(user.id))
             return
         cooldown[user.id] = time.time()
 
@@ -373,13 +373,13 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             left = DAILY_LIMIT_SECONDS - seconds
             h = left // 3600
             m = (left % 3600) // 60
-            await q.edit_message_text(f"❌ Trial harian sudah dipakai mas.\n\nCoba lagi dalam {h} jam {m} menit.", reply_markup=main_menu(user.id))
+            await q.edit_message_text(f"âŒ Trial harian sudah dipakai mas.\n\nCoba lagi dalam {h} jam {m} menit.", reply_markup=main_menu(user.id))
             return
 
         result, ok = create_trial_from_script(vpn_user)
         if not ok:
             logger.warning(f"Gagal buat trial untuk user {user.id}: {result.get('error')}")
-            await q.edit_message_text(f"❌ Gagal buat trial mas.\n\nError:\n{result['error']}", reply_markup=main_menu(user.id))
+            await q.edit_message_text(f"âŒ Gagal buat trial mas.\n\nError:\n{result['error']}", reply_markup=main_menu(user.id))
             return
 
         save_trial(user.id, result["vpn_user"], result["vpn_pass"], result["expired_text"])
@@ -392,7 +392,7 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "status":
         result = get_trial_from_script(vpn_user)
         if not result:
-            await q.edit_message_text("❌ Lu belum punya trial aktif mas.\n\nKlik tombol trial buat bikin akun 30 menit.", reply_markup=main_menu(user.id))
+            await q.edit_message_text("âŒ Lu belum punya trial aktif mas.\n\nKlik tombol trial buat bikin akun 30 menit.", reply_markup=main_menu(user.id))
             return
         await q.edit_message_text(trial_text(result, False), reply_markup=main_menu(user.id))
 
@@ -401,9 +401,9 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "admin":
         if not is_admin(user.id):
-            await q.edit_message_text("❌ Lu bukan admin mas.")
+            await q.edit_message_text("âŒ Lu bukan admin mas.")
             return
-        await q.edit_message_text("┏━━〔 ADMIN PANEL 〕━━┓\n┃ 🛠 ZYNETRA CONTROL\n┗━━━━━━━━━━━━━━━━━━┛", reply_markup=admin_menu())
+        await q.edit_message_text("â”â”â”ã€” ADMIN PANEL ã€•â”â”â”“\nâ”ƒ ðŸ›  ZYNETRA CONTROL\nâ”—â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”›", reply_markup=admin_menu())
 
     elif data == "admin_stats":
         if not is_admin(user.id):
@@ -413,13 +413,13 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_trial = conn.execute("SELECT COUNT(*) FROM trials").fetchone()[0]
         conn.close()
         active_list = run_cmd(f"bash {TRIAL_SCRIPT} list")
-        text = f"""┏━━〔 STATISTIK BOT 〕━━┓
-┃ 👥 Total User   : {total_user}
-┃ 🚀 Total Trial  : {total_trial}
-┃ 📅 Trial Today  : {trial_today_count()}
-┃ ⏳ Durasi       : {TRIAL_MINUTES} menit
-┃ 🕒 Jam          : {fmt_time(now_wib())}
-┗━━━━━━━━━━━━━━━━━━┛
+        text = f"""â”â”â”ã€” STATISTIK BOT ã€•â”â”â”“
+â”ƒ ðŸ‘¥ Total User   : {total_user}
+â”ƒ ðŸš€ Total Trial  : {total_trial}
+â”ƒ ðŸ“… Trial Today  : {trial_today_count()}
+â”ƒ â³ Durasi       : {TRIAL_MINUTES} menit
+â”ƒ ðŸ•’ Jam          : {fmt_time(now_wib())}
+â”—â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”›
 
 {active_list}"""
         await q.edit_message_text(text[:3900], reply_markup=admin_menu())
@@ -430,8 +430,8 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         os.makedirs(BACKUP_DIR, exist_ok=True)
         filename = f"{BACKUP_DIR}/zynetra_backup_{int(time.time())}.db"
         shutil.copy(DB_PATH, filename)
-        await context.bot.send_document(chat_id=user.id, document=open(filename, "rb"), caption="💾 Backup database Zynetra")
-        await q.edit_message_text("✅ Backup berhasil dikirim mas.", reply_markup=admin_menu())
+        await context.bot.send_document(chat_id=user.id, document=open(filename, "rb"), caption="ðŸ’¾ Backup database Zynetra")
+        await q.edit_message_text("âœ… Backup berhasil dikirim mas.", reply_markup=admin_menu())
 
     elif data == "admin_logs":
         if not is_admin(user.id):
@@ -439,16 +439,16 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logs = run_cmd(f"tail -n 40 {LOG_FILE}")
         if len(logs) > 3500:
             logs = logs[-3500:]
-        await q.edit_message_text(f"🧾 LOG TERAKHIR:\n\n{logs}", reply_markup=admin_menu())
+        await q.edit_message_text(f"ðŸ§¾ LOG TERAKHIR:\n\n{logs}", reply_markup=admin_menu())
 
     elif data == "admin_broadcast":
         if not is_admin(user.id):
             return
         broadcast_mode.add(user.id)
-        await q.edit_message_text("📢 Kirim pesan broadcast sekarang.\n\nContoh:\nMaintenance jam 02:00 WIB", reply_markup=admin_menu())
+        await q.edit_message_text("ðŸ“¢ Kirim pesan broadcast sekarang.\n\nContoh:\nMaintenance jam 02:00 WIB", reply_markup=admin_menu())
 
 
-# ── Text handler ───────────────────────────────────────────────────────────────
+# â”€â”€ Text handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     save_user(user)
@@ -458,13 +458,13 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         parts = update.message.text.strip().split()
         if len(parts) != 2:
-            await update.message.reply_text("❌ Format salah mas.\n\nContoh: andi 30")
+            await update.message.reply_text("âŒ Format salah mas.\n\nContoh: andi 30")
             return
         vpn_user = safe_vpn_name(parts[0])
         days = parts[1]
         result, ok = create_premium_from_script(vpn_user, days)
         if not ok:
-            await update.message.reply_text(f"❌ Gagal buat premium mas.\n\nError:\n{result['error']}")
+            await update.message.reply_text(f"âŒ Gagal buat premium mas.\n\nError:\n{result['error']}")
             return
         logger.info(f"Premium dibuat: admin={user.id} vpn_user={result['vpn_user']} days={result.get('days')}")
         await update.message.reply_text(premium_text(result, True), reply_markup=admin_menu())
@@ -482,22 +482,22 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         failed  = 0
         for (uid,) in users:
             try:
-                await context.bot.send_message(chat_id=uid, text=f"📢 INFO ZYNETRA\n\n{msg}")
+                await context.bot.send_message(chat_id=uid, text=f"ðŸ“¢ INFO ZYNETRA\n\n{msg}")
                 success += 1
             except Exception:
                 failed += 1
         logger.info(f"Broadcast selesai: berhasil={success} gagal={failed}")
-        await update.message.reply_text(f"✅ Broadcast selesai.\n\nBerhasil: {success}\nGagal: {failed}")
+        await update.message.reply_text(f"âœ… Broadcast selesai.\n\nBerhasil: {success}\nGagal: {failed}")
     else:
-        await update.message.reply_text("Ketik /start mas 😎")
+        await update.message.reply_text("Ketik /start mas ðŸ˜Ž")
 
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+# â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def main():
     if not BOT_TOKEN:
         raise RuntimeError("BOT_TOKEN kosong. Isi .env dulu mas.")
     if not ADMIN_IDS:
-        logger.warning("⚠️  ADMIN_IDS kosong! Tidak ada yang bisa akses admin panel.")
+        logger.warning("âš ï¸  ADMIN_IDS kosong! Tidak ada yang bisa akses admin panel.")
 
     os.makedirs("/opt/zivpn-bot", exist_ok=True)
     os.makedirs(BACKUP_DIR, exist_ok=True)
