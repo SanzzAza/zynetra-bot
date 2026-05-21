@@ -35,6 +35,7 @@ CLEANUP_INTERVAL   = 10 * 60  # jalanin cleanup tiap 10 menit
 
 cooldown       = {}
 broadcast_mode = set()
+premium_mode   = set()
 reminder_sent  = set()
 
 # ── Logging ──────────────────────────────────────────────────────────────────
@@ -114,6 +115,7 @@ def main_menu(user_id):
 def admin_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 Statistik", callback_data="admin_stats"), InlineKeyboardButton("📡 Server", callback_data="server")],
+        [InlineKeyboardButton("👑 Create Premium", callback_data="admin_premium"), InlineKeyboardButton("📋 List Premium", callback_data="admin_premium_list")],
         [InlineKeyboardButton("💾 Backup", callback_data="admin_backup"), InlineKeyboardButton("📢 Broadcast", callback_data="admin_broadcast")],
         [InlineKeyboardButton("🧾 Logs", callback_data="admin_logs"), InlineKeyboardButton("🔙 Kembali", callback_data="home")],
     ])
@@ -156,6 +158,28 @@ def create_trial_from_script(vpn_user):
         return {"vpn_user": vpn_user, "vpn_pass": parts[1], "expired_text": parts[2] if len(parts) > 2 else "30 menit", "raw": out}, True
     return {"error": out}, False
 
+def safe_vpn_name(name: str) -> str:
+    clean = "".join(c for c in name.strip() if c.isalnum() or c in ("_", "-"))
+    return clean[:32]
+
+def create_premium_from_script(vpn_user, days):
+    vpn_user = safe_vpn_name(vpn_user)
+    if not vpn_user:
+        return {"error": "Username kosong / tidak valid"}, False
+    if not str(days).isdigit() or int(days) < 1:
+        return {"error": "Durasi hari harus angka minimal 1"}, False
+    out = run_cmd(f"bash {TRIAL_SCRIPT} premium {vpn_user} {int(days)}")
+    if out.startswith("BERHASIL|") or out.startswith("SUDAH_ADA|"):
+        parts = out.split("|")
+        return {
+            "vpn_user": vpn_user,
+            "vpn_pass": parts[1],
+            "expired_text": parts[2] if len(parts) > 2 else "-",
+            "days": parts[3] if len(parts) > 3 else str(days),
+            "raw": out,
+        }, True
+    return {"error": out}, False
+
 def last_trial_seconds(user_id):
     conn = db()
     row = conn.execute("SELECT created_at FROM trials WHERE telegram_id=?", (user_id,)).fetchone()
@@ -189,6 +213,24 @@ def trial_text(data, created=True):
 ┃ 🔐 User : {data['vpn_user']}
 ┃ 🔑 Pass : {data['vpn_pass']}
 ┃ ⏳ Masa : {TRIAL_MINUTES} Menit
+┃ 📅 Exp/Sisa : {data.get('expired_text', data.get('left', '-'))}
+┗━━━━━━━━━━━━━━━━━━┛
+
+📘 Tutorial:
+{TUTORIAL_URL}"""
+
+def premium_text(data, created=True):
+    title = "AKUN PREMIUM BERHASIL DIBUAT" if created else "AKUN PREMIUM MASIH AKTIF"
+    return f"""╔══════════════════╗
+║    ZYNETRA VPN    ║
+╚══════════════════╝
+
+┏━━〔 {title} 〕━━┓
+┃ 🌐 Host : {HOST}
+┃ 🧭 Server : {SERVER_NAME}
+┃ 👑 Paket : Premium {data.get('days', '-')} Hari
+┃ 🔐 User : {data['vpn_user']}
+┃ 🔑 Pass : {data['vpn_pass']}
 ┃ 📅 Exp/Sisa : {data.get('expired_text', data.get('left', '-'))}
 ┗━━━━━━━━━━━━━━━━━━┛
 
@@ -287,6 +329,20 @@ async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await update.message.reply_text("┏━━〔 ADMIN PANEL 〕━━┓\n┃ 🛠 ZYNETRA CONTROL\n┗━━━━━━━━━━━━━━━━━━┛", reply_markup=admin_menu())
 
+
+async def premium_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not is_admin(user.id):
+        await update.message.reply_text("❌ Lu bukan admin mas.")
+        return
+    if len(context.args) != 2:
+        await update.message.reply_text("👑 Format:\n/premium username hari\n\nContoh:\n/premium andi 30")
+        return
+    result, ok = create_premium_from_script(context.args[0], context.args[1])
+    if not ok:
+        await update.message.reply_text(f"❌ Gagal buat premium mas.\n\nError:\n{result['error']}")
+        return
+    await update.message.reply_text(premium_text(result, True))
 
 # ── Callback handler ───────────────────────────────────────────────────────────
 async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -396,6 +452,24 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     save_user(user)
+    if user.id in premium_mode:
+        premium_mode.remove(user.id)
+        if not is_admin(user.id):
+            return
+        parts = update.message.text.strip().split()
+        if len(parts) != 2:
+            await update.message.reply_text("❌ Format salah mas.\n\nContoh: andi 30")
+            return
+        vpn_user = safe_vpn_name(parts[0])
+        days = parts[1]
+        result, ok = create_premium_from_script(vpn_user, days)
+        if not ok:
+            await update.message.reply_text(f"❌ Gagal buat premium mas.\n\nError:\n{result['error']}")
+            return
+        logger.info(f"Premium dibuat: admin={user.id} vpn_user={result['vpn_user']} days={result.get('days')}")
+        await update.message.reply_text(premium_text(result, True), reply_markup=admin_menu())
+        return
+
     if user.id in broadcast_mode:
         broadcast_mode.remove(user.id)
         if not is_admin(user.id):
@@ -433,6 +507,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("admin", admin_cmd))
+    app.add_handler(CommandHandler("premium", premium_cmd))
     app.add_handler(CallbackQueryHandler(callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
